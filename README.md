@@ -82,7 +82,7 @@ Audio: Handle the AudioContext auto-play policy (only start audio after the firs
 Output format: Provide the full code for the files mentioned above. For layout.tsx or globals.css, keeping them standard is fine. Focus heavily on the math logic in ParticleSystem.tsx to handle the coordinate mapping for Stars -> Cylinder(Cake) -> Text.
 ```
 
-### Addition
+### Addition0
 
 ```markdownlint
 Role: Senior Creative Frontend Engineer. Context: We have a working prototype, but the visual quality is lacking. Task: Refactor the ParticleSystem and Experience components to fix specific visual issues.
@@ -130,7 +130,7 @@ components/ParticleSystem.tsx (Fixing the round particles, text density/scaling 
 card.config.ts (Update colors if needed).
 ```
 
-### Addition
+### Addition1
 
 ```markdownlint
 Role: Senior Creative Frontend Engineer. Context: The visual style is now acceptable (round particles, bloom are working). However, the transitions and composition need final polish to be production-ready.
@@ -174,7 +174,7 @@ components/Experience.tsx (Handling the Sphere visibility logic and Camera contr
 components/ParticleSystem.tsx (Updating particle count and text sampling density).
 ```
 
-### Addition
+### Addition2
 
 ```markdownlint
 Role: Senior Creative Frontend Engineer. Context: The visual structure is solid (good density, good shapes). Now we need to add "Life" and "Micro-Interactions". The particles currently look too static/frozen once they form the shape.
@@ -208,7 +208,7 @@ Ensure <OrbitControls autoRotate autoRotateSpeed={0.5} /> is active. The slow ro
 Output: Please provide the full updated code for components/ParticleSystem.tsx. You do not need to change the config or the main page unless necessary for the camera controls.
 ```
 
-### Addition
+### Addition3
 
 ```markdownlint
 Role: Senior Creative Frontend Engineer. Context: The "Cake" shape in Stage 1 currently looks like two empty wireframe cylinders. It lacks volume and detail. Task: Refine the calculateCakePositions logic in ParticleSystem.tsx to create a much more organic, solid-looking cake with a candle.
@@ -252,10 +252,112 @@ Color Override: If possible, force these specific particles to flicker with an O
 Output: Please provide the updated components/ParticleSystem.tsx code focusing on the getExpreiencePositions (or equivalent) function to implement this improved Cake geometry.
 ```
 
-### Addition
+### Addition4
 
 ```markdownlint
 Role: Senior Creative Frontend Engineer.Context: The project is 90% there. The Candle and interactions are great.Critical Visual Fixes Required:1. Fix "Hollow Cake" (Must Implementation):Problem: The cake currently looks like two hollow rings/tubes. The Top Surfaces are missing.Solution: In calculateCakePositions, you must explicitly distribute about 30% of the particles onto the horizontal surfaces (Disks).Math Logic:Instead of just x = R * cos(theta), use r = R * sqrt(Math.random()) to fill the circle.Zone A (Top Tier Cap): Fill the circle at the very top ($y = height_{top}$).Zone B (Bottom Tier Shoulder): Fill the ring exposed by the bottom tier ($y = height_{bottom}$, radius between $R_{top}$ and $R_{bottom}$).2. Improve Transition (Remove "Collapse"):Problem: Transition from Cake -> Text creates a weird "implosion" effect where particles collapse into a line/point.Solution: Add a Random Noise Offset during the interpolation.Technique: In your vertex shader or useFrame loop, when progress is between 0.0 and 1.0, add a noise vector that pushes particles OUTWARDS slightly, rather than letting them take a direct linear path through the center. This creates an "Explosion/Morph" effect instead of a "Collapse".3. Candle Fidelity:Make the candle flame particles (the center top cluster) strictly Red/Orange. Currently, they blend too much with the gold.Output:Please provide the updated components/ParticleSystem.tsx. Focus heavily on the getCakePositions function to ensure the top caps are filled with particles.
+```
+
+### Addition5
+
+```markdownlint
+Role: Senior Creative Frontend Engineer. Context: The visual output is great, but the Text Readability needs one final adjustment. Task: Increase the vertical spacing (Line Height) between the distinct lines of text in Stage 2.
+
+Specific Requirement:
+
+Problem: The "Happy Birthday" line and the "Name" line are currently too close to each other. The particles from the top line are almost touching the bottom line.
+
+Solution: In your calculateTextPositions (or equivalent logic), increase the vertical gap between the lines.
+
+Implementation:
+
+If you are calculating offsets manually: Push the second line (the Name) further down along the negative Y-axis. Increase the gap by at least 50% (1.5x) of the current spacing.
+
+If you are using a library property (like lineHeight): Increase it significantly (e.g., from 1 to 1.5 or 1.6).
+
+Output: Please provide the updated components/ParticleSystem.tsx (or wherever the text layout logic resides) with this increased spacing applied.
+```
+
+### Addition6
+
+```markdownlint
+Role: Senior Creative Frontend Engineer. Context: The user wants to display multiple messages in Stage 2, not just one. Task: Implement a Text Carousel (Loop) for the wishes array in Stage 2.
+
+Functional Requirements:
+
+1. Cycling Logic:
+
+Current: Displays static text (likely wishes[0]).
+
+Required: Cycle through the wishes array from card.config.ts.
+
+Interval: Change the message every 5 seconds.
+
+Loop: When the end of the array is reached, go back to the first wish.
+
+2. Implementation Details (ParticleSystem.tsx):
+
+Add a state for currentWishIndex.
+
+Use a useEffect or useInterval hook to increment the index.
+
+Trigger: When currentWishIndex changes, you MUST recalculate the target positions for the new text string immediately.
+
+Transition: The existing useFrame lerp logic should automatically handle the morphing. The particles will fly from the "Old Text" shape to the "New Text" shape.
+
+3. Maintain Previous Layout Fixes:
+
+Crucial: Ensure the Line Height / Spacing logic you fixed in the previous step (separating the name from the wish) is applied to every new message generated in the loop.
+
+4. Performance Hint:
+
+Generating 3D Text geometry can be expensive. Ensure you clean up old geometries if necessary, or just rely on R3F's automatic disposal.
+
+The calculateTextPositions function should be robust enough to handle strings of varying lengths without crashing.
+
+Output: Please provide the updated components/ParticleSystem.tsx.
+```
+
+### Addition7
+
+```markdownlint
+Role: Senior Creative Frontend Engineer. Context: We are refining the Stage 2 (Text Loop) animation. Task: Implement a "Stable Anchor" for the recipient's name.
+
+The Problem: Currently, when the carousel loops to a new Wish message, all particles (including the Name at the bottom) scatter and reform. This looks unstable.
+
+The Requirement: The recipient's name (e.g., "Alex") must remain completely static and solid while the top wish text transforms.
+
+Technical Implementation Strategy (Particle Segmentation):
+
+Split the Buffer:
+
+Divide the total particle count (e.g., 8000) into two segments:
+
+Segment A (Name Particles): Fixed amount (e.g., 2000 particles).
+
+Segment B (Wish Particles): The remaining particles (e.g., 6000 particles).
+
+Memoize the Name:
+
+Calculate the target positions for the Name ONCE (when Stage 2 is first prepared or on mount).
+
+Store these coordinates. Do NOT recalculate them when the currentWishIndex changes.
+
+Dynamic Wish Update:
+
+When currentWishIndex changes, only recalculate the target positions for Segment B (the Wish text).
+
+Merge for Frame Update:
+
+In your render loop or position update logic, the target array for Stage 2 should always be: [...FixedNamePositions, ...NewWishPositions].
+
+Because the FixedNamePositions are identical to the previous frame, the lerp function will result in zero movement for those particles, creating a solid, rock-steady name.
+
+Maintain Layout:
+
+Keep the vertical spacing (line height) logic from the previous step. Ensure the Name is positioned well below the changing Wish text.
+
+Output: Please provide the updated components/ParticleSystem.tsx implementing this segmented particle logic.
 ```
 
 ## Install

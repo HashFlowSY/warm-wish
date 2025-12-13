@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useRef, useEffect, useState } from "react";
+import React, { useRef, useMemo, useState, useEffect } from "react";
 import { useFrame, extend, useLoader } from "@react-three/fiber";
 import * as THREE from "three";
 import { FontLoader, TextGeometry } from "three-stdlib";
@@ -11,9 +11,12 @@ extend({ TextGeometry });
 
 // --- Constants ---
 const PARTICLE_COUNT = 8000;
-const CANDLE_COUNT = 150; // Reserved particles for flame
+const NAME_BLOCK_SIZE = 3000; // Fixed particles for the stable name
+const WISH_BLOCK_SIZE = PARTICLE_COUNT - NAME_BLOCK_SIZE; // Remaining particles for the dynamic wish
+
+const CANDLE_COUNT = 150; // Reserved indices (0-149) for flame
 const PARTICLE_SIZE = 0.12;
-const MORPH_SPEED = 0.05; // Slightly slower for more dramatic transitions
+const MORPH_SPEED = 0.05;
 const FONT_URL =
   "https://threejs.org/examples/fonts/helvetiker_bold.typeface.json";
 
@@ -144,275 +147,297 @@ const sampleGeometry = (
       output[i * 3 + 2] =
         u * selectedTri.a.z + v * selectedTri.b.z + w * selectedTri.c.z;
     }
+  } else {
+    // Fallback: If no area (empty text), set all to 0
+    output.fill(0);
   }
 
   return output;
+};
+
+// --- Static Generators (Module Scope) ---
+
+const generateStarField = () => {
+  const pos = new Float32Array(PARTICLE_COUNT * 3);
+  const cols = new Float32Array(PARTICLE_COUNT * 3);
+  const sz = new Float32Array(PARTICLE_COUNT);
+
+  const starColor = new THREE.Color(cardConfig.colors.starColor);
+
+  for (let i = 0; i < PARTICLE_COUNT; i++) {
+    // Void Stage: Large Sphere Cloud
+    const r = 25 * Math.cbrt(Math.random());
+    const theta = Math.random() * 2 * Math.PI;
+    const phi = Math.acos(2 * Math.random() - 1);
+
+    pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+    pos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+    pos[i * 3 + 2] = r * Math.cos(phi);
+
+    cols[i * 3] = starColor.r;
+    cols[i * 3 + 1] = starColor.g;
+    cols[i * 3 + 2] = starColor.b;
+
+    sz[i] = PARTICLE_SIZE * (0.5 + Math.random());
+  }
+  return { initialPositions: pos, initialColors: cols, sizes: sz };
+};
+
+// Calculate initial stars immediately
+const {
+  initialPositions: STATIC_INITIAL_POS,
+  initialColors: STATIC_INITIAL_COLS,
+  sizes: STATIC_SIZES,
+} = generateStarField();
+
+const generateCakePositions = () => {
+  const pos = new Float32Array(PARTICLE_COUNT * 3);
+  const cols = new Float32Array(PARTICLE_COUNT * 3);
+  const cakeColor = new THREE.Color(cardConfig.colors.cakeColor);
+
+  // HDR Colors for Bloom Pop
+  const flameColorInner = new THREE.Color(1.5, 1.2, 0.1); // Bright Yellow
+  const flameColorOuter = new THREE.Color(2.0, 0.3, 0.0); // Intense Orange/Red
+
+  for (let i = 0; i < PARTICLE_COUNT; i++) {
+    // --- 1. CANDLE FLAME (Top Priority) ---
+    if (i < CANDLE_COUNT) {
+      const p = i / CANDLE_COUNT; // 0 to 1
+      // Lifted Y position slightly to sit perfectly on top cap
+      const y = 2.15 + p * 0.6;
+
+      const rBase = 0.12;
+      const r = rBase * Math.sin(p * Math.PI);
+
+      const theta = Math.random() * Math.PI * 2;
+      const jitter = 0.02;
+
+      pos[i * 3] = r * Math.cos(theta) + (Math.random() - 0.5) * jitter;
+      pos[i * 3 + 1] = y + (Math.random() - 0.5) * jitter;
+      pos[i * 3 + 2] = r * Math.sin(theta) + (Math.random() - 0.5) * jitter;
+
+      const fCol = p < 0.4 ? flameColorOuter : flameColorInner;
+      cols[i * 3] = fCol.r;
+      cols[i * 3 + 1] = fCol.g;
+      cols[i * 3 + 2] = fCol.b;
+
+      continue;
+    }
+
+    // --- 2. CAKE BODY ---
+    const rand = Math.random();
+    const frostedNoise = (Math.random() - 0.5) * 0.1;
+
+    // Geometry Dimensions
+    const bottomR = 3.0;
+    const topR = 1.8;
+    const bottomH = 1.4;
+    const topH = 1.6;
+    const bottomY = -1.5;
+    const midY = bottomY + bottomH; // ~ -0.1
+    const topY = midY + topH; // ~ 1.5
+
+    let x = 0,
+      y = 0,
+      z = 0;
+
+    if (rand < 0.35) {
+      // A. Bottom Wall
+      const r = bottomR + frostedNoise;
+      const theta = Math.random() * Math.PI * 2;
+      const h = Math.random() * bottomH;
+      x = r * Math.cos(theta);
+      y = bottomY + h;
+      z = r * Math.sin(theta);
+    } else if (rand < 0.6) {
+      // B. Top Wall
+      const r = topR + frostedNoise;
+      const theta = Math.random() * Math.PI * 2;
+      const h = Math.random() * topH;
+      x = r * Math.cos(theta);
+      y = midY + h;
+      z = r * Math.sin(theta);
+    } else if (rand < 0.8) {
+      // C. Shoulder (Exposed Ring on Bottom Tier)
+      const rMin2 = topR * topR;
+      const rMax2 = bottomR * bottomR;
+      const r =
+        Math.sqrt(rMin2 + (rMax2 - rMin2) * Math.random()) + frostedNoise;
+      const theta = Math.random() * Math.PI * 2;
+      x = r * Math.cos(theta);
+      y = midY;
+      z = r * Math.sin(theta);
+    } else if (rand < 0.95) {
+      // D. Top Cap (Full Disk)
+      const r = topR * Math.sqrt(Math.random()) + frostedNoise;
+      const theta = Math.random() * Math.PI * 2;
+      x = r * Math.cos(theta);
+      y = topY;
+      z = r * Math.sin(theta);
+    } else {
+      // E. Volume/Filling (Inside)
+      const r = bottomR * Math.sqrt(Math.random());
+      const theta = Math.random() * Math.PI * 2;
+      const h = Math.random() * (bottomH + topH);
+      x = r * Math.cos(theta);
+      y = bottomY + h;
+      z = r * Math.sin(theta);
+      if (y > midY) {
+        const newR = topR * Math.sqrt(Math.random());
+        x = newR * Math.cos(theta);
+        z = newR * Math.sin(theta);
+      }
+    }
+
+    pos[i * 3] = x;
+    pos[i * 3 + 1] = y;
+    pos[i * 3 + 2] = z;
+
+    cols[i * 3] = cakeColor.r;
+    cols[i * 3 + 1] = cakeColor.g;
+    cols[i * 3 + 2] = cakeColor.b;
+  }
+  return { pos, cols };
+};
+
+// --- Segmented Text Generators ---
+
+const generateNameBlock = (font: any) => {
+  // Generates fixed number of particles (NAME_BLOCK_SIZE) for the name
+  const nameGeo = new TextGeometry(cardConfig.name || " ", {
+    font: font,
+    size: 1.8,
+    height: 0.1,
+    curveSegments: 6,
+    bevelEnabled: true,
+    bevelThickness: 0.02,
+    bevelSize: 0.01,
+    bevelSegments: 2,
+  } as any);
+  nameGeo.center();
+
+  const points = sampleGeometry(nameGeo, NAME_BLOCK_SIZE);
+
+  const pos = new Float32Array(NAME_BLOCK_SIZE * 3);
+  const cols = new Float32Array(NAME_BLOCK_SIZE * 3);
+  const color = new THREE.Color(cardConfig.colors.textColor);
+
+  for (let i = 0; i < NAME_BLOCK_SIZE; i++) {
+    pos[i * 3] = points[i * 3];
+    pos[i * 3 + 1] = points[i * 3 + 1] - 1.5; // Offset Bottom (-1.5)
+    pos[i * 3 + 2] = points[i * 3 + 2];
+
+    cols[i * 3] = color.r;
+    cols[i * 3 + 1] = color.g;
+    cols[i * 3 + 2] = color.b;
+  }
+
+  nameGeo.dispose();
+  return { pos, cols };
+};
+
+const generateWishBlock = (font: any, text: string) => {
+  // Generates remaining particles (WISH_BLOCK_SIZE) for the specific wish
+  const wishGeo = new TextGeometry(text || " ", {
+    font: font,
+    size: 1.5,
+    height: 0.1,
+    curveSegments: 6,
+    bevelEnabled: true,
+    bevelThickness: 0.02,
+    bevelSize: 0.01,
+    bevelSegments: 2,
+  } as any);
+  wishGeo.center();
+
+  const points = sampleGeometry(wishGeo, WISH_BLOCK_SIZE);
+
+  const pos = new Float32Array(WISH_BLOCK_SIZE * 3);
+  const cols = new Float32Array(WISH_BLOCK_SIZE * 3);
+  const color = new THREE.Color(cardConfig.colors.textColor);
+
+  for (let i = 0; i < WISH_BLOCK_SIZE; i++) {
+    pos[i * 3] = points[i * 3];
+    pos[i * 3 + 1] = points[i * 3 + 1] + 1.5; // Offset Top (+1.5)
+    pos[i * 3 + 2] = points[i * 3 + 2];
+
+    cols[i * 3] = color.r;
+    cols[i * 3 + 1] = color.g;
+    cols[i * 3 + 2] = color.b;
+  }
+
+  wishGeo.dispose();
+  return { pos, cols };
 };
 
 const ParticleSystem: React.FC<ParticleSystemProps> = ({ stage }) => {
   const pointsRef = useRef<THREE.Points>(null);
   const font = useLoader(FontLoader, FONT_URL);
 
-  const [targetPositions, setTargetPositions] = useState<Float32Array>(
-    new Float32Array(PARTICLE_COUNT * 3)
-  );
-  const [targetColors, setTargetColors] = useState<Float32Array>(
-    new Float32Array(PARTICLE_COUNT * 3)
-  );
+  // State for the Text Carousel
+  const [wishIndex, setWishIndex] = useState(0);
 
-  // Initialize Memory
-  const { initialPositions, initialColors, sizes } = useMemo(() => {
-    const pos = new Float32Array(PARTICLE_COUNT * 3);
-    const cols = new Float32Array(PARTICLE_COUNT * 3);
-    const sz = new Float32Array(PARTICLE_COUNT);
-
-    const starColor = new THREE.Color(cardConfig.colors.starColor);
-
-    for (let i = 0; i < PARTICLE_COUNT; i++) {
-      // Void Stage: Large Sphere Cloud
-      const r = 25 * Math.cbrt(Math.random());
-      const theta = Math.random() * 2 * Math.PI;
-      const phi = Math.acos(2 * Math.random() - 1);
-
-      pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
-      pos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
-      pos[i * 3 + 2] = r * Math.cos(phi);
-
-      cols[i * 3] = starColor.r;
-      cols[i * 3 + 1] = starColor.g;
-      cols[i * 3 + 2] = starColor.b;
-
-      sz[i] = PARTICLE_SIZE * (0.5 + Math.random());
-    }
-    return { initialPositions: pos, initialColors: cols, sizes: sz };
-  }, []);
-
-  // --- Layout Generators ---
-
-  const generateCakePositions = () => {
-    const pos = new Float32Array(PARTICLE_COUNT * 3);
-    const cols = new Float32Array(PARTICLE_COUNT * 3);
-    const cakeColor = new THREE.Color(cardConfig.colors.cakeColor);
-
-    // HDR Colors for Bloom Pop
-    const flameColorInner = new THREE.Color(1.5, 1.2, 0.1); // Bright Yellow
-    const flameColorOuter = new THREE.Color(2.0, 0.3, 0.0); // Intense Orange/Red
-
-    for (let i = 0; i < PARTICLE_COUNT; i++) {
-      // --- 1. CANDLE FLAME (Top Priority) ---
-      if (i < CANDLE_COUNT) {
-        const p = i / CANDLE_COUNT; // 0 to 1
-        // Lifted Y position slightly to sit perfectly on top cap
-        const y = 2.15 + p * 0.6;
-
-        const rBase = 0.12;
-        const r = rBase * Math.sin(p * Math.PI);
-
-        const theta = Math.random() * Math.PI * 2;
-        const jitter = 0.02;
-
-        pos[i * 3] = r * Math.cos(theta) + (Math.random() - 0.5) * jitter;
-        pos[i * 3 + 1] = y + (Math.random() - 0.5) * jitter;
-        pos[i * 3 + 2] = r * Math.sin(theta) + (Math.random() - 0.5) * jitter;
-
-        const fCol = p < 0.4 ? flameColorOuter : flameColorInner;
-        cols[i * 3] = fCol.r;
-        cols[i * 3 + 1] = fCol.g;
-        cols[i * 3 + 2] = fCol.b;
-
-        continue;
-      }
-
-      // --- 2. CAKE BODY ---
-      const rand = Math.random();
-      const frostedNoise = (Math.random() - 0.5) * 0.1;
-
-      // Geometry Dimensions
-      const bottomR = 3.0;
-      const topR = 1.8;
-      const bottomH = 1.4;
-      const topH = 1.6;
-      const bottomY = -1.5;
-      const midY = bottomY + bottomH; // ~ -0.1
-      const topY = midY + topH; // ~ 1.5
-
-      let x = 0,
-        y = 0,
-        z = 0;
-
-      // Optimized Probabilities for Solid Look (Caps need ample particles)
-      // 0.0 - 0.35: Bottom Wall
-      // 0.35 - 0.60: Top Wall
-      // 0.60 - 0.80: Shoulder (Ring)
-      // 0.80 - 0.95: Top Cap
-      // 0.95 - 1.00: Internal Volume
-
-      if (rand < 0.35) {
-        // A. Bottom Wall
-        const r = bottomR + frostedNoise;
-        const theta = Math.random() * Math.PI * 2;
-        const h = Math.random() * bottomH;
-        x = r * Math.cos(theta);
-        y = bottomY + h;
-        z = r * Math.sin(theta);
-      } else if (rand < 0.6) {
-        // B. Top Wall
-        const r = topR + frostedNoise;
-        const theta = Math.random() * Math.PI * 2;
-        const h = Math.random() * topH;
-        x = r * Math.cos(theta);
-        y = midY + h;
-        z = r * Math.sin(theta);
-      } else if (rand < 0.8) {
-        // C. Shoulder (Exposed Ring on Bottom Tier)
-        // Uniform Ring Sampling: sqrt(r_min^2 + (r_max^2 - r_min^2) * rand)
-        const rMin2 = topR * topR;
-        const rMax2 = bottomR * bottomR;
-        const r =
-          Math.sqrt(rMin2 + (rMax2 - rMin2) * Math.random()) + frostedNoise;
-        const theta = Math.random() * Math.PI * 2;
-
-        x = r * Math.cos(theta);
-        y = midY;
-        z = r * Math.sin(theta);
-      } else if (rand < 0.95) {
-        // D. Top Cap (Full Disk)
-        // Uniform Disk Sampling: R * sqrt(rand)
-        const r = topR * Math.sqrt(Math.random()) + frostedNoise;
-        const theta = Math.random() * Math.PI * 2;
-        x = r * Math.cos(theta);
-        y = topY;
-        z = r * Math.sin(theta);
-      } else {
-        // E. Volume/Filling (Inside)
-        const r = bottomR * Math.sqrt(Math.random());
-        const theta = Math.random() * Math.PI * 2;
-        const h = Math.random() * (bottomH + topH);
-        x = r * Math.cos(theta);
-        y = bottomY + h;
-        z = r * Math.sin(theta);
-        if (y > midY) {
-          const newR = topR * Math.sqrt(Math.random());
-          x = newR * Math.cos(theta);
-          z = newR * Math.sin(theta);
-        }
-      }
-
-      pos[i * 3] = x;
-      pos[i * 3 + 1] = y;
-      pos[i * 3 + 2] = z;
-
-      cols[i * 3] = cakeColor.r;
-      cols[i * 3 + 1] = cakeColor.g;
-      cols[i * 3 + 2] = cakeColor.b;
-    }
-    return { pos, cols };
-  };
-
-  const generateTextPositions = () => {
-    const pos = new Float32Array(PARTICLE_COUNT * 3);
-    const cols = new Float32Array(PARTICLE_COUNT * 3);
-    const color = new THREE.Color(cardConfig.colors.textColor);
-
-    const wishText = cardConfig.wishes[0];
-    const nameText = cardConfig.name;
-
-    const totalChars = wishText.length + nameText.length;
-    const wishCount = Math.floor(
-      PARTICLE_COUNT * (wishText.length / totalChars)
-    );
-    const nameCount = PARTICLE_COUNT - wishCount;
-
-    // 1. Generate Wish Geometry
-    const wishGeo = new TextGeometry(wishText, {
-      font: font as any,
-      size: 1.5,
-      height: 0.1,
-      curveSegments: 6,
-      bevelEnabled: true,
-      bevelThickness: 0.02,
-      bevelSize: 0.01,
-      bevelSegments: 2,
-    } as any);
-    wishGeo.center();
-
-    // 2. Generate Name Geometry
-    const nameGeo = new TextGeometry(nameText, {
-      font: font as any,
-      size: 1.8,
-      height: 0.1,
-      curveSegments: 6,
-      bevelEnabled: true,
-      bevelThickness: 0.02,
-      bevelSize: 0.01,
-      bevelSegments: 2,
-    } as any);
-    nameGeo.center();
-
-    // 3. Sample Points
-    const wishPoints = sampleGeometry(wishGeo, wishCount);
-    const namePoints = sampleGeometry(nameGeo, nameCount);
-
-    // 4. Merge and Offset
-    let ptr = 0;
-
-    // Fill Wish
-    for (let i = 0; i < wishCount; i++) {
-      pos[ptr * 3] = wishPoints[i * 3];
-      pos[ptr * 3 + 1] = wishPoints[i * 3 + 1] + 1.0;
-      pos[ptr * 3 + 2] = wishPoints[i * 3 + 2];
-
-      cols[ptr * 3] = color.r;
-      cols[ptr * 3 + 1] = color.g;
-      cols[ptr * 3 + 2] = color.b;
-      ptr++;
-    }
-
-    // Fill Name
-    for (let i = 0; i < nameCount; i++) {
-      pos[ptr * 3] = namePoints[i * 3];
-      pos[ptr * 3 + 1] = namePoints[i * 3 + 1] - 0.8;
-      pos[ptr * 3 + 2] = namePoints[i * 3 + 2];
-
-      cols[ptr * 3] = color.r;
-      cols[ptr * 3 + 1] = color.g;
-      cols[ptr * 3 + 2] = color.b;
-      ptr++;
-    }
-
-    wishGeo.dispose();
-    nameGeo.dispose();
-    return { pos, cols };
-  };
-
-  // --- State Machine ---
+  // --- Carousel Logic ---
   useEffect(() => {
-    let newPos: Float32Array;
-    let newCols: Float32Array;
+    if (stage === Stage.Message) {
+      const interval = setInterval(() => {
+        setWishIndex((prev) => (prev + 1) % cardConfig.wishes.length);
+      }, 5000);
+      return () => clearInterval(interval);
+    } else {
+      // Reset safely without triggering infinite loops or unnecessary renders
+      setWishIndex((prev) => (prev === 0 ? prev : 0));
+    }
+  }, [stage]);
+
+  // --- Memoized Generators ---
+
+  // 1. Generate the Name Block ONCE (Stable Anchor)
+  const nameBlock = useMemo(() => {
+    if (!font) return null;
+    return generateNameBlock(font);
+  }, [font]);
+
+  // 2. Generate the Wish Block whenever index changes (Dynamic)
+  const wishBlock = useMemo(() => {
+    if (!font) return null;
+    return generateWishBlock(font, cardConfig.wishes[wishIndex]);
+  }, [font, wishIndex]);
+
+  // 3. Assemble Target Positions
+  const { targetPositions, targetColors } = useMemo(() => {
+    let pos: Float32Array;
+    let cols: Float32Array;
 
     if (stage === Stage.Void) {
-      const { initialPositions: p, initialColors: c } = {
-        initialPositions,
-        initialColors,
-      };
-      newPos = p;
-      newCols = c;
+      pos = STATIC_INITIAL_POS;
+      cols = STATIC_INITIAL_COLS;
     } else if (stage === Stage.Cake) {
-      const { pos, cols } = generateCakePositions();
-      newPos = pos;
-      newCols = cols;
-    } else if (stage === Stage.Message) {
-      const { pos, cols } = generateTextPositions();
-      newPos = pos;
-      newCols = cols;
+      const cakeData = generateCakePositions();
+      pos = cakeData.pos;
+      cols = cakeData.cols;
+    } else if (stage === Stage.Message && nameBlock && wishBlock) {
+      // Segmented Assembly: [NAME_BLOCK_SIZE] + [WISH_BLOCK_SIZE]
+      pos = new Float32Array(PARTICLE_COUNT * 3);
+      cols = new Float32Array(PARTICLE_COUNT * 3);
+
+      // Copy Name (Stable)
+      pos.set(nameBlock.pos, 0);
+      cols.set(nameBlock.cols, 0);
+
+      // Copy Wish (Dynamic)
+      // The wish block starts at index NAME_BLOCK_SIZE * 3 inside the position array
+      // pos.set takes the source array and the OFFSET index in the target array
+      pos.set(wishBlock.pos, NAME_BLOCK_SIZE * 3);
+      cols.set(wishBlock.cols, NAME_BLOCK_SIZE * 3);
     } else {
-      newPos = initialPositions;
-      newCols = initialColors;
+      // Fallback
+      pos = STATIC_INITIAL_POS;
+      cols = STATIC_INITIAL_COLS;
     }
 
-    setTargetPositions(newPos);
-    setTargetColors(newCols);
-  }, [stage, font]);
+    return { targetPositions: pos, targetColors: cols };
+  }, [stage, font, wishIndex, nameBlock, wishBlock]);
 
   // --- Animation Loop ---
   useFrame(({ clock }) => {
@@ -444,11 +469,11 @@ const ParticleSystem: React.FC<ParticleSystemProps> = ({ stage }) => {
       const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
       // --- 1. TRANSITION NOISE (Explosion Effect) ---
-      // If the particle is far from target (transitioning), add turbulence.
-      // This prevents the "implosion" effect where particles collapse to the center line.
-      // Instead, they take a chaotic, curved path.
+      // Only apply significant noise if moving distance is large
+      // This naturally stabilizes the Name particles because their dist is ~0
       if (dist > 0.5) {
-        const noiseAmp = 0.08; // Magnitude of turbulence
+        const noiseAmp = 0.08;
+        // Math.random() is fine here as useFrame runs outside React render cycle
         currentPositions[i3] += (Math.random() - 0.5) * noiseAmp;
         currentPositions[i3 + 1] += (Math.random() - 0.5) * noiseAmp;
         currentPositions[i3 + 2] += (Math.random() - 0.5) * noiseAmp;
@@ -503,13 +528,13 @@ const ParticleSystem: React.FC<ParticleSystemProps> = ({ stage }) => {
       <bufferGeometry>
         <bufferAttribute
           attach="attributes-position"
-          args={[initialPositions, 3]}
+          args={[STATIC_INITIAL_POS, 3]}
         />
         <bufferAttribute
           attach="attributes-customColor"
-          args={[initialColors, 3]}
+          args={[STATIC_INITIAL_COLS, 3]}
         />
-        <bufferAttribute attach="attributes-size" args={[sizes, 1]} />
+        <bufferAttribute attach="attributes-size" args={[STATIC_SIZES, 1]} />
       </bufferGeometry>
       <shaderMaterial
         attach="material"
