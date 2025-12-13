@@ -1,24 +1,13 @@
 import type { Metadata } from "next";
-import { Dancing_Script, Lato } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
 
-// Optimize Google Fonts
-const dancingScript = Dancing_Script({
-  subsets: ["latin"],
-  weight: ["400", "700"],
-  variable: "--font-dancing-script",
-});
-
-const lato = Lato({
-  subsets: ["latin"],
-  weight: ["300", "400", "700"],
-  variable: "--font-lato",
-});
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Magical Birthday Card",
+  title: "Make a Wish",
   description:
-    "A warm, interactive birthday card with particle effects, animations, and music.",
+    "A 3D interactive particle-based birthday card with morphing geometries.",
 };
 
 export default function RootLayout({
@@ -28,11 +17,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${lato.variable} ${dancingScript.variable} antialiased`}
-      >
-        {children}
-      </body>
+      <body className={inter.className}>{children}</body>
     </html>
   );
 }
