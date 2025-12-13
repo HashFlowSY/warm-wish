@@ -113,13 +113,9 @@ Avatar: Ensure the Avatar image is styled with rounded-full, border-4 border-whi
 Output: Provide the full, clean code for all files.
 ```
 
-## How to install
+## Install
 
 ```shell
-git clone
-
-cd warm-wish
-
 pnpm install
 
 pnpm build
