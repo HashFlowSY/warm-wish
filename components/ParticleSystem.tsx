@@ -17,8 +17,7 @@ const WISH_BLOCK_SIZE = PARTICLE_COUNT - NAME_BLOCK_SIZE; // Remaining particles
 const CANDLE_COUNT = 150; // Reserved indices (0-149) for flame
 const PARTICLE_SIZE = 0.12;
 const MORPH_SPEED = 0.05;
-const FONT_URL =
-  "https://threejs.org/examples/fonts/helvetiker_bold.typeface.json";
+const FONT_URL = "/fonts/specific.json";
 
 // --- Types ---
 interface ParticleSystemProps {
