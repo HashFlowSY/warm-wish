@@ -17,7 +17,7 @@ const WISH_BLOCK_SIZE = PARTICLE_COUNT - NAME_BLOCK_SIZE; // Remaining particles
 const CANDLE_COUNT = 150; // Reserved indices (0-149) for flame
 const PARTICLE_SIZE = 0.12;
 const MORPH_SPEED = 0.05;
-const FONT_URL = "/fonts/specific.json";
+const FONT_URL = cardConfig.fontsUrl;
 
 // --- Types ---
 interface ParticleSystemProps {
@@ -54,21 +54,17 @@ const particleFragmentShader = `
 `;
 
 // --- Helper: Triangle Area ---
-const getTriangleArea = (
-  a: THREE.Vector3,
-  b: THREE.Vector3,
-  c: THREE.Vector3
-) => {
+function getTriangleArea(a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3) {
   const v1 = new THREE.Vector3().subVectors(b, a);
   const v2 = new THREE.Vector3().subVectors(c, a);
   return v1.cross(v2).length() * 0.5;
-};
+}
 
 // --- Helper: Weighted Sampling ---
-const sampleGeometry = (
+function sampleGeometry(
   geometry: THREE.BufferGeometry,
   count: number
-): Float32Array => {
+): Float32Array {
   const posAttribute = geometry.attributes.position;
   const indexAttribute = geometry.index;
   const triangles: {
@@ -152,11 +148,11 @@ const sampleGeometry = (
   }
 
   return output;
-};
+}
 
 // --- Static Generators (Module Scope) ---
 
-const generateStarField = () => {
+function generateStarField() {
   const pos = new Float32Array(PARTICLE_COUNT * 3);
   const cols = new Float32Array(PARTICLE_COUNT * 3);
   const sz = new Float32Array(PARTICLE_COUNT);
@@ -180,7 +176,7 @@ const generateStarField = () => {
     sz[i] = PARTICLE_SIZE * (0.5 + Math.random());
   }
   return { initialPositions: pos, initialColors: cols, sizes: sz };
-};
+}
 
 // Calculate initial stars immediately
 const {
@@ -189,7 +185,7 @@ const {
   sizes: STATIC_SIZES,
 } = generateStarField();
 
-const generateCakePositions = () => {
+function generateCakePositions() {
   const pos = new Float32Array(PARTICLE_COUNT * 3);
   const cols = new Float32Array(PARTICLE_COUNT * 3);
   const cakeColor = new THREE.Color(cardConfig.colors.cakeColor);
@@ -297,11 +293,11 @@ const generateCakePositions = () => {
     cols[i * 3 + 2] = cakeColor.b;
   }
   return { pos, cols };
-};
+}
 
 // --- Segmented Text Generators ---
 
-const generateNameBlock = (font: any) => {
+function generateNameBlock(font: any) {
   // Generates fixed number of particles (NAME_BLOCK_SIZE) for the name
   const nameGeo = new TextGeometry(cardConfig.name || " ", {
     font: font,
@@ -333,9 +329,9 @@ const generateNameBlock = (font: any) => {
 
   nameGeo.dispose();
   return { pos, cols };
-};
+}
 
-const generateWishBlock = (font: any, text: string) => {
+function generateWishBlock(font: any, text: string) {
   // Generates remaining particles (WISH_BLOCK_SIZE) for the specific wish
   const wishGeo = new TextGeometry(text || " ", {
     font: font,
@@ -367,9 +363,9 @@ const generateWishBlock = (font: any, text: string) => {
 
   wishGeo.dispose();
   return { pos, cols };
-};
+}
 
-const ParticleSystem: React.FC<ParticleSystemProps> = ({ stage }) => {
+function ParticleSystem({ stage }: ParticleSystemProps) {
   const pointsRef = useRef<THREE.Points>(null);
   const font = useLoader(FontLoader, FONT_URL);
 
@@ -378,14 +374,14 @@ const ParticleSystem: React.FC<ParticleSystemProps> = ({ stage }) => {
 
   // --- Carousel Logic ---
   useEffect(() => {
-    if (stage === Stage.Message) {
+    if (stage === Stage.Message && cardConfig.wishes.length > 0) {
       const interval = setInterval(() => {
         setWishIndex((prev) => (prev + 1) % cardConfig.wishes.length);
-      }, 5000);
-      return () => clearInterval(interval);
-    } else {
-      // Reset safely without triggering infinite loops or unnecessary renders
-      setWishIndex((prev) => (prev === 0 ? prev : 0));
+      }, cardConfig.wordsTime);
+      return () => {
+        clearInterval(interval);
+        setWishIndex(0);
+      };
     }
   }, [stage]);
 
@@ -436,7 +432,7 @@ const ParticleSystem: React.FC<ParticleSystemProps> = ({ stage }) => {
     }
 
     return { targetPositions: pos, targetColors: cols };
-  }, [stage, font, wishIndex, nameBlock, wishBlock]);
+  }, [stage, nameBlock, wishBlock]);
 
   // --- Animation Loop ---
   useFrame(({ clock }) => {
@@ -546,6 +542,6 @@ const ParticleSystem: React.FC<ParticleSystemProps> = ({ stage }) => {
       />
     </points>
   );
-};
+}
 
 export default ParticleSystem;

@@ -7,16 +7,10 @@ import { EffectComposer, Bloom } from "@react-three/postprocessing";
 import * as THREE from "three";
 import ParticleSystem from "./ParticleSystem";
 import { cardConfig } from "../config/card.config";
-import { Stage } from "../types";
+import { Stage, OriginSphereProps } from "../types";
 
 // --- Origin Sphere Component ---
-const OriginSphere = ({
-  onClick,
-  stage,
-}: {
-  onClick: () => void;
-  stage: Stage;
-}) => {
+function OriginSphere({ onClick, stage }: OriginSphereProps) {
   const meshRef = useRef<THREE.Mesh>(null);
   // Track the current base scale for smooth transitions
   const currentScale = useRef(1);
@@ -74,10 +68,10 @@ const OriginSphere = ({
       />
     </mesh>
   );
-};
+}
 
 // --- Scene Content ---
-const Scene = () => {
+function Scene() {
   const [stage, setStage] = useState<Stage>(Stage.Void);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -163,9 +157,9 @@ const Scene = () => {
       </EffectComposer>
     </>
   );
-};
+}
 
-const Experience = () => {
+export default function Experience() {
   return (
     <div className="w-full h-full relative">
       <Canvas camera={{ position: [0, 0, 14], fov: 45 }}>
@@ -180,6 +174,4 @@ const Experience = () => {
       </div>
     </div>
   );
-};
-
-export default Experience;
+}

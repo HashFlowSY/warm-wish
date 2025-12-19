@@ -15,7 +15,10 @@ export const cardConfig: CardConfig = {
     "余生幸福",
   ],
   // Gentle ambient background music
-  musicUrl: "https://radio.plaza.one/mp3",
+  musicUrl:
+    "https://res.cloudinary.com/dr6d86idz/video/upload/v1766108790/stars_bdtedz.mp3",
+  fontsUrl: "/fonts/specific.json",
+  wordsTime: 5000,
   colors: {
     starColor: "#b3e5fc", // Light blue-ish white
     cakeColor: "#ffd54f", // Warm Gold
